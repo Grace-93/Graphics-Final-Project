@@ -1,0 +1,327 @@
+  <!DOCTYPE html>
+<head>
+<title>Large Plane</title>
+<script src="three.min.js"></script>
+<script src="KeyboardState.js"></script>
+<script src="GLTFLoader.js"></script>
+
+<script>
+    var scene, camera, renderer;
+
+    var canvas;
+
+    var keyboard = new KeyboardState();
+    var hinder = [];
+
+    var dirLight;
+    var angle;
+    var currPos, currX;
+
+
+    var timeStep = 0.5;
+    var counter = 0;
+    var jump = 0;
+
+    // Vars for robot
+    var robot, body, rightArm, leftArm, head, leftShoulder, rightShoulder, fire, ground, leftWire, rightWire;
+
+    var star;
+    var darkblue = new THREE.Color("rgb(1, 16, 59)");
+
+    function createScene() {        
+        renderer.setClearColor(darkblue); 
+        scene = new THREE.Scene(); 
+    
+        camera = new THREE.PerspectiveCamera(60, canvas.width/canvas.height, 0.1, 2000);
+        camera.up = new THREE.Vector3(0,0,1);
+        camera.position.set(0,-65,5);
+        camera.rotation.x = Math.PI/2.1;
+        
+
+        // ambient light
+        ambientLight = new THREE.AmbientLight("white",0.5);
+        scene.add(ambientLight);
+
+
+        // directional light
+        dirLight = new THREE.DirectionalLight("white", 1);
+        dirLight.position.set(0,-50,100);
+        scene.add(dirLight);
+
+        // Load texture
+        var tloader = new THREE.TextureLoader();
+        var groundMap = tloader.load("basemap.jpg");
+        var robotMap = tloader.load("robotbase.jpg");
+        var robotBump = tloader.load("robotbump.png");
+        var robotNorm = tloader.load("robotnorm.jpg");
+        var robotHead = tloader.load("headmap.jpg");
+        var fireText = tloader.load("fire.jpg");
+        var warningText = tloader.load("warning.jpg");
+        var hinderText = tloader.load("metal.jpg");
+
+        // Add the ground
+        var groundMaterial = new THREE.MeshPhongMaterial();        
+        groundMaterial.map = groundMap;
+        ground = new THREE.Mesh( new THREE.SphereGeometry(100,100,100), groundMaterial );
+        scene.add(ground);
+        ground.rotation.z = Math.PI/2;
+        ground.position.y = 0;
+        ground.position.z = -90;
+
+        // add robot
+        var robotMaterial = new THREE.MeshMatcapMaterial();
+        robotMaterial.map = robotMap;
+        robotMaterial.bumpMap = robotBump;
+        robotMaterial.bumpScale = 3;
+        robotMaterial.normalMap = robotNorm;
+
+        var headMaterial = new THREE.MeshMatcapMaterial();
+        headMaterial.map = robotHead;
+
+        var fireMaterial = new THREE.MeshMatcapMaterial();
+        fireMaterial.map = fireText;
+        
+        robot = new THREE.Object3D();
+        
+        // body
+        body = new THREE.Mesh(new THREE.BoxGeometry(7, 7, 7), robotMaterial);
+        robot.add(body);
+
+        // head
+        head = new THREE.Mesh(new THREE.SphereGeometry(3.5,50,50), headMaterial);
+        head.position.z = 3.5;
+        robot.add(head);
+
+        // leftWire
+        leftWire = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,3),new THREE.MeshMatcapMaterial());
+        leftWire.position.x = -2.5;
+        leftWire.position.z = 7;
+        leftWire.rotation.y = -0.6;
+        robot.add(leftWire);
+
+        // rightWire
+        rightWire = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,3),new THREE.MeshMatcapMaterial());
+        rightWire.position.x = 2.5;
+        rightWire.position.z = 7;
+        rightWire.rotation.y = 0.6;
+        robot.add(rightWire);
+
+        // leftArm
+        leftArm = new THREE.Mesh(new THREE.BoxGeometry(1,1,4.25),headMaterial);
+        leftArm.position.x = -4.5;
+        leftArm.position.z = -1;
+        leftArm.rotation.y = 0.15;
+        robot.add(leftArm);
+
+        // leftShoulder
+        leftShoulder = new THREE.Mesh(new THREE.SphereGeometry(1.25,10,10), new THREE.MeshMatcapMaterial());
+        leftShoulder.position.x = -4;
+        leftShoulder.position.z = 1;
+        robot.add(leftShoulder);
+
+        // rightArm
+        rightArm = new THREE.Mesh(new THREE.BoxGeometry(1,1,4.25), headMaterial);
+        rightArm.position.x = 4.5;
+        rightArm.position.z = -1;
+        rightArm.rotation.y = -0.15;
+        robot.add(rightArm);
+
+        // rightShoulder
+        rightShoulder = new THREE.Mesh(new THREE.SphereGeometry(1.25,10,10), new THREE.MeshMatcapMaterial());
+        rightShoulder.position.x = 4;
+        rightShoulder.position.z = 1;
+        robot.add(rightShoulder);
+
+        // fire
+        fire = new THREE.Mesh(new THREE.ConeGeometry(2.5,4, 10), fireMaterial);
+        fire.position.z = -6;
+        fire.rotation.x = -Math.PI/2;
+        robot.add(fire);
+
+        robot.position.set(0,-50,0);
+        robot.scale.set(0.4,0.4,0.4);
+        scene.add(robot);
+
+        // Generate random barriers
+        var degree = [];
+        for (let i=0; i<60; i++){
+          degree.push(Math.random() * (Math.PI/2))
+        }
+        var pos = new Array(2);
+        for (i=0; i<60; i++){
+          // z,y values
+          pos[i] = [degree[i], Math.sin(degree[i])*100, Math.cos(degree[i])*100];
+        }
+
+        for (i=15; i<30; i++){
+          pos[i][1] = - pos[i][1];
+        }
+        for (i=30; i<45; i++){
+          pos[i][2] = - pos[i][2];
+        }
+        for (i=45; i<60; i++){
+          pos[i][1] = - pos[i][1];
+          pos[i][2] = - pos[i][2];
+        }
+        
+        for (i=0; i<60; i++){
+          var flag = Math.floor(Math.random() * 3);        
+          if (flag == 0){            
+            var hinderMaterial = new THREE.MeshMatcapMaterial();            
+            hinderMaterial.map = hinderText;
+            var box = new THREE.Mesh(new THREE.BoxGeometry(1, 4, 20), hinderMaterial);
+          } else{
+            var warnMaterial = new THREE.MeshMatcapMaterial();
+            warnMaterial.map = warningText;
+            var box = new THREE.Mesh(new THREE.BoxGeometry(1, 4, 10), warnMaterial);
+            box.position.z = 1;
+          }         
+          ground.add(box);
+          hinder.push(box);
+          var road = Math.floor(Math.random() * 3) 
+          box.position.z = pos[i][1];
+          box.position.x = pos[i][2];
+          if (road == 0){
+            box.position.y = 6;
+          } else if (road == 1){
+            box.position.y = -6;
+          }
+          if ( i>=0 && i<15){
+            box.rotation.y = (Math.PI/2) - pos[i][0];
+          } else if (i>=15 && i<30) {
+            box.rotation.y = (Math.PI/2) + pos[i][0];
+          } else if (i>=30 && i<45) {
+            box.rotation.y = -((Math.PI/2) - pos[i][0]);
+          } else {
+            box.rotation.y = -((Math.PI/2) + pos[i][0]);
+          }
+        }
+
+        // Load a glTF resource
+        var loader = new THREE.GLTFLoader();
+        // Set their position
+        var x = [10, -10, -10, -12, 2, -5, -9, -20, 10, 9, 16, 12, 25];
+        var y = [-50, -45, -55, -50, -50, -20, -30, -25, -55, -47, -30, -25, -30];
+        var z = [6, 7, 5, 8, 9, 20, 15, 17, 5, 7, 15, 20, 15];
+        var s = [1,1,1,0.6, 1, 1, 1, 1.3,1,0.7,1,1.3,1.6];
+        var rz = [0,0,0,1,0.7,0,0,0,0,0.3,0,0,0];
+        var ry = [-0.3,0,0.4,0,0.6,0,0,0,0.4,0,0.3,0,0];
+        var rx = [-0.5,0,0,0,0,0,0,0,0,0,0.9,0,0];
+        // Load 13 stars
+        for (let i=0; i<13; i++){
+          loader.load('star2.glb',
+              function ( gltf ) {
+                  star = gltf.scene;                
+                  star.position.set(x[i],y[i],z[i]);
+                  star.scale.set(s[i],s[i],s[i]);star.rotation.set(rx[i],ry[i],rz[i]);
+                  scene.add( star );
+              }
+          );
+        }
+    }
+
+    function updateAnimation() {
+        // Create the rolling ground
+        ground.rotation.x += 0.002;
+
+        // Let the robot bump
+        if (counter <20 ){
+          robot.position.z += 0.08;
+          leftArm.rotation.y += 0.01;
+          rightArm.rotation.y -= 0.01;
+          fire.position.z -= 0.01;
+          counter ++;
+        } else if (counter >= 20 && counter < 40){
+          robot.position.z -= 0.08;
+          leftArm.rotation.y -= 0.01;
+          rightArm.rotation.y += 0.01;
+          fire.position.z += 0.01;
+          counter ++;
+          if (counter == 40){ counter = 0}
+        }
+
+        // Get the current posiiton for later use;
+        currPos = new THREE.Vector3();robot.getWorldPosition(currPos);
+        currX = currPos.x;
+        
+        // scan keyboard
+        keyboard.update();
+        if ( keyboard.pressed("left") ) {        
+          if (currPos.x >= -8){
+            robot.position.x -= 0.2;
+          } 
+        } else if ( keyboard.pressed("right") ) {
+          if (currPos.x <= 8){
+            robot.position.x += 0.2;
+          }
+        }
+
+        // Jump
+        const jumpSteps = 50;
+        const maxHeight = 40;
+
+        if (jump > 0) {
+            jump --;
+            height = maxHeight*(0.25-(jump/jumpSteps-0.5)*(jump/jumpSteps-0.5));
+            robot.position.z = height;
+        } else {
+            if ( keyboard.pressed('space') ) {
+                jump = jumpSteps;
+            }
+        }
+      
+      // Checking collision
+      var originalPoint = new THREE.Vector3();
+      var floader = new THREE.FontLoader();
+      body.getWorldPosition(originalPoint);
+        for (let vi=0; vi<body.geometry.vertices.length; vi++){
+          var localVertex = body.geometry.vertices[vi].clone();
+          var globalVertex = body.localToWorld(localVertex);
+          var directionVector = globalVertex.sub(originalPoint);
+
+          var ray = new THREE.Raycaster(originalPoint, directionVector.clone().normalize());
+          var collisionResults = ray.intersectObjects(hinder);
+
+          if (collisionResults.length>0 && collisionResults[0].distance < directionVector.length()){
+            document.getElementById("overlay").innerHTML = "HIT";           
+          } else {
+            document.getElementById("overlay").innerHTML = "";
+          }
+        }      
+    }
+
+    function render() {
+        updateAnimation();
+        renderer.render(scene, camera);
+        requestAnimationFrame( render );
+    }
+
+    //----------------------------------------------------------------------------------
+
+    // The init() function is called by the onload event when the document has loaded.
+    function init() {
+        try {            
+            renderer = new THREE.WebGLRenderer( {antialias: true} );
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            canvas = renderer.domElement;
+            document.getElementById("canvas-holder").appendChild(canvas);
+        }
+        catch (e) {
+            document.getElementById("canvas-holder").innerHTML = "<h3><b>WebGL is not available.</b><h3>";
+            return;
+        }
+    
+        createScene();
+        render();
+    }
+
+</script>
+
+</head>
+<body onload="init()" style="overflow: hidden">
+<div id="canvas-holder">
+<p style="position: absolute; z-index: 1; color: white; padding-left: 2em;">Click in window; left&right arrows to move; space to jump</p>
+<p id="overlay" style="position: absolute; z-index:1; color: red; padding-left: 120pt; font-size:800%;">HIT</p>
+</div>
+</body>
+</html>
